@@ -1,0 +1,109 @@
+# docker network create nginx_network
+# docker network create mysql_network
+# docker network create redis_network
+networks:
+  nginx_network:
+    external: true
+  mysql_network:
+    external: true
+  redis_network:
+    external: true
+
+# docker volume create mysql_volume
+# docker volume create redis_volume
+volumes:
+  mysql_volume:
+    external: true
+  redis_volume:
+    external: true
+
+services:
+  # MySQL Container
+  mysql:
+    container_name: mysql
+    restart: always
+    image: mysql:8.0
+    networks:
+      - mysql_network
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+      TZ: ${TIMEZONE}
+    volumes:
+      - mysql_volume:/var/lib/mysql
+      - ./mysql/config/my.cnf:/etc/mysql/my.cnf
+    command:
+      [
+        'mysqld',
+        '--character-set-server=utf8mb4',
+        '--collation-server=utf8mb4_unicode_ci'
+      ]
+    # ports:
+    #   - "3306:3306"
+
+  # PhpMyAdmin Container
+  phpmyadmin:
+    container_name: phpmyadmin
+    restart: always
+    image: phpmyadmin
+    environment:
+      PMA_HOST: mysql
+      UPLOAD_LIMIT: 300M
+    networks:
+      - nginx_network
+      - mysql_network
+    ports:
+      - 8001:80
+
+  # redis:
+  #   container_name: redis
+  #   restart: always
+  #   image: redis:7.2
+  #   volumes:
+  #     - redis_volume:/data
+  #     - ./redis/config:/config/
+  #   networks:
+  #     - redis_network
+  #   command: "redis-server /config/redis.conf"
+    # ports:
+    #   - 6379:6379
+
+  # Web Container
+  php:
+    container_name: php
+    restart: always
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      DB_HOST: mysql
+      DB_DATABASE: ${MYSQL_DATABASE}
+      DB_USERNAME: ${MYSQL_USER}
+      DB_PASSWORD: ${MYSQL_PASSWORD}
+    networks:
+      - nginx_network
+      - mysql_network
+    volumes:
+      - ./www:/var/www/html
+      - ./php/config/php.ini:/usr/local/etc/php/php.ini
+    depends_on:
+      - mysql
+    # ports:
+    #   - 8000:8000
+
+  # Nginx Container
+  nginx:
+    container_name: nginx
+    restart: always
+    image: nginx:latest
+    networks:
+      - nginx_network
+    volumes:
+      - ./www:/var/www/html
+      - ./nginx/config/nginx.conf:/etc/nginx/nginx.conf
+    depends_on:
+      - php
+    ports:
+      - "8000:80"
